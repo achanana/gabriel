@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Gabriel Round Trip</string>
     <string name="from_server">Image sent from server</string>
+    <string name="hello" />
 </resources>
