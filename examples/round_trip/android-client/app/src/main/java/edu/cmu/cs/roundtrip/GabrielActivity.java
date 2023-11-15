@@ -11,6 +11,7 @@ import android.speech.tts.TextToSpeech;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -29,6 +30,7 @@ import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayOutputStream;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.function.Consumer;
 
@@ -80,6 +82,10 @@ public class GabrielActivity extends AppCompatActivity {
 
         Consumer<ResultWrapper> consumer = resultWrapper -> {
             if (resultWrapper.getResultsCount() == 0) {
+                if (annotation_display_start != null &&
+                        Duration.between(annotation_display_start, Instant.now()).getSeconds() > 1) {
+                    textView.setText("");
+                }
                 return;
             }
             ResultWrapper.Result result = resultWrapper.getResults(0);
@@ -103,16 +109,21 @@ public class GabrielActivity extends AppCompatActivity {
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-//                serverComm.sendSupplier(() -> {
-//                    Bitmap bitmap = previewView.getBitmap();
-//                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
-//                    bitmap.compress(Bitmap.CompressFormat.JPEG,80,stream);
-//                    return InputFrame.newBuilder().setPayloadType(PayloadType.IMAGE)
-//                            .addPayloads(ByteString.copyFrom(stream.toByteArray()))
-//                            .build();
-//                }, SOURCE, false);
                 typed_string = editText.getText().toString();
                 editText.getText().clear();
+            }
+        });
+        editText.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View view, boolean b) {
+                String default_string = getString(R.string.annotation_text_box_default_val);
+                if (!b && editText.getText().toString().isEmpty()) {
+                    editText.setText(default_string);
+                    return;
+                }
+                if (b && editText.getText().toString().equals(default_string)) {
+                    editText.setText("");
+                }
             }
         });
     }

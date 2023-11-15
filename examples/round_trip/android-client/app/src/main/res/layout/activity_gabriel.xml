@@ -33,7 +33,7 @@
 
         android:gravity="center"
         app:layout_constraintBottom_toTopOf="@id/topLine"
-        android:text="Annotation"
+        android:text=""
         android:textColor="#FFFFFF"
         android:background="#000000"
         android:textSize="15pt"
@@ -61,7 +61,7 @@
         android:layout_marginRight="30dp"
         app:layout_constraintRight_toRightOf="parent"
         android:background="#FFFFFF"
-        android:text="Type your annotation text..."
+        android:text="@string/annotation_text_box_default_val"
         android:textColor="#A9A9A9"
         android:gravity="center"
         android:textSize="8pt"
