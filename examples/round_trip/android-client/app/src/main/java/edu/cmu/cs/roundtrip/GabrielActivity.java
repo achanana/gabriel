@@ -25,9 +25,11 @@ import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.view.PreviewView;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayOutputStream;
+import java.time.Instant;
 import java.util.function.Consumer;
 
 import edu.cmu.cs.gabriel.camera.CameraCapture;
@@ -35,14 +37,16 @@ import edu.cmu.cs.gabriel.camera.YuvToJPEGConverter;
 import edu.cmu.cs.gabriel.camera.ImageViewUpdater;
 import edu.cmu.cs.gabriel.client.comm.ServerComm;
 import edu.cmu.cs.gabriel.client.results.ErrorType;
+import edu.cmu.cs.gabriel.protocol.Protos;
 import edu.cmu.cs.gabriel.protocol.Protos.InputFrame;
 import edu.cmu.cs.gabriel.protocol.Protos.ResultWrapper;
 import edu.cmu.cs.gabriel.protocol.Protos.PayloadType;
+import edu.cmu.cs.roundtrip.protos.ClientExtras;
 
 public class GabrielActivity extends AppCompatActivity {
     private static final String TAG = "GabrielActivity";
     private static final String SOURCE = "roundtrip";
-    private static final int PORT = 9099;
+    private static final int PORT = 8099;
     private static final int WIDTH = 640;
     private static final int HEIGHT = 480;
 
@@ -59,7 +63,9 @@ public class GabrielActivity extends AppCompatActivity {
 
     private String typed_string = "";
 
+    private ByteString annotation_frame = null;
 
+    private Instant annotation_display_start = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,25 +78,6 @@ public class GabrielActivity extends AppCompatActivity {
         editText = findViewById(R.id.editText);
         button = findViewById(R.id.startAnnotationButton);
 
-
-        // Set a click listener on the button
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                typed_string = editText.getText().toString();
-                editText.getText().clear();
-                serverComm.sendSupplier(() -> {
-                    Bitmap bitmap = previewView.getBitmap();
-                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                    bitmap.compress(Bitmap.CompressFormat.JPEG,80,stream);
-                    return InputFrame.newBuilder().setPayloadType(PayloadType.IMAGE)
-                            .addPayloads(ByteString.copyFrom(stream.toByteArray()))
-                            .build();
-                }, SOURCE, false);
-            }
-        });
-
-
         Consumer<ResultWrapper> consumer = resultWrapper -> {
             if (resultWrapper.getResultsCount() == 0) {
                 return;
@@ -98,6 +85,7 @@ public class GabrielActivity extends AppCompatActivity {
             ResultWrapper.Result result = resultWrapper.getResults(0);
             ByteString byteString = result.getPayload();
             textView.setText(byteString.toStringUtf8());
+            annotation_display_start = Instant.now();
         };
 
         Consumer<ErrorType> onDisconnect = errorType -> {
@@ -110,6 +98,23 @@ public class GabrielActivity extends AppCompatActivity {
 
         yuvToJPEGConverter = new YuvToJPEGConverter(this);
         cameraCapture = new CameraCapture(this, analyzer, WIDTH, HEIGHT, previewView);
+
+        // Set a click listener on the button
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+//                serverComm.sendSupplier(() -> {
+//                    Bitmap bitmap = previewView.getBitmap();
+//                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+//                    bitmap.compress(Bitmap.CompressFormat.JPEG,80,stream);
+//                    return InputFrame.newBuilder().setPayloadType(PayloadType.IMAGE)
+//                            .addPayloads(ByteString.copyFrom(stream.toByteArray()))
+//                            .build();
+//                }, SOURCE, false);
+                typed_string = editText.getText().toString();
+                editText.getText().clear();
+            }
+        });
     }
 
     final private ImageAnalysis.Analyzer analyzer = new ImageAnalysis.Analyzer() {
@@ -118,10 +123,24 @@ public class GabrielActivity extends AppCompatActivity {
             serverComm.sendSupplier(() -> {
                 ByteString jpegByteString = yuvToJPEGConverter.convert(image);
 
-                return InputFrame.newBuilder()
+                Protos.InputFrame.Builder builder = InputFrame.newBuilder()
                         .setPayloadType(PayloadType.IMAGE)
-                        .addPayloads(jpegByteString)
-                        .build();
+                        .addPayloads(jpegByteString);
+
+                if (!typed_string.isEmpty()) {
+                    ClientExtras.AnnotationData annotationData =
+                            ClientExtras.AnnotationData.newBuilder()
+                                    .setAnnotationText(typed_string)
+                                    .setFrameData(jpegByteString)
+                                    .build();
+                    Any any = Any.newBuilder()
+                            .setValue(annotationData.toByteString())
+                            .setTypeUrl("type.googleapis.com/client.AnnotationData")
+                            .build();
+                    builder.setExtras(any);
+                    typed_string = "";
+                }
+                return builder.build();
             }, SOURCE, false);
 
             image.close();
