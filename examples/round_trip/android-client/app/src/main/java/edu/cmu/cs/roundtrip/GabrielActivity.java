@@ -8,6 +8,7 @@ import android.hardware.SensorManager;
 import android.media.AudioRecord;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
+import java.util.Locale;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
@@ -69,6 +70,12 @@ public class GabrielActivity extends AppCompatActivity {
 
     private Instant annotation_display_start = null;
 
+    private TextToSpeech tts;
+
+    private long prev_time = 0;
+
+    private String prev_spoken = "";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -79,6 +86,26 @@ public class GabrielActivity extends AppCompatActivity {
         textView = findViewById(R.id.textAnnotation);
         editText = findViewById(R.id.editText);
         button = findViewById(R.id.startAnnotationButton);
+
+        prev_time = System.currentTimeMillis();
+        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if (status == TextToSpeech.SUCCESS) {
+                    int result = tts.setLanguage(Locale.US);
+
+                    if (result == TextToSpeech.LANG_MISSING_DATA ||
+                            result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        Log.e("TTS", "Language not supported");
+                    } else {
+                        // The TTS engine has been successfully initialized
+                        // You can now use textToSpeech.speak(...)
+                    }
+                } else {
+                    Log.e("TTS", "Initialization failed");
+                }
+            }
+        });
 
         Consumer<ResultWrapper> consumer = resultWrapper -> {
             if (resultWrapper.getResultsCount() == 0) {
@@ -92,6 +119,22 @@ public class GabrielActivity extends AppCompatActivity {
             ByteString byteString = result.getPayload();
             textView.setText(byteString.toStringUtf8());
             annotation_display_start = Instant.now();
+            String to_speak = byteString.toStringUtf8();
+            if(!tts.isSpeaking()){
+                if(prev_spoken.equals(to_speak)){
+                    // Same annotation, don't repeat if within 5 seconds
+                    long curr_time = System.currentTimeMillis();
+                    if(curr_time-prev_time > 5000){
+                        prev_time = curr_time;
+                        tts.speak(to_speak, TextToSpeech.QUEUE_FLUSH, null, null);
+                    }
+                }else{
+                    // Different annotation, speak immediately
+                    prev_spoken = to_speak;
+                    tts.speak(to_speak, TextToSpeech.QUEUE_FLUSH, null, null);
+
+                }
+            }
         };
 
         Consumer<ErrorType> onDisconnect = errorType -> {
@@ -161,6 +204,10 @@ public class GabrielActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+        }
         cameraCapture.shutdown();
     }
 }
